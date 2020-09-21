@@ -4,6 +4,7 @@ const bodyParser = require('body-parser')
 const shortUrl = require('node-url-shortener');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const cors = require('cors')
  
 
 const db = mysql.createConnection({
@@ -20,6 +21,7 @@ db.connect((err) => {
     console.log("Mysql Connected");
 })
 const app = express();
+app.use(cors())
 app.use(bodyParser.json());
 
 app.get('/', (req,res)=> {
@@ -60,10 +62,13 @@ app.get('/h1', (req,res) => {
     })
 })
 
+var scrape_id;
+
 app.get('/user/:id/h1', (req,res, next) => {
     let url
     let sql = "SELECT short_url FROM user WHERE id = ? ";
-    user_id = req.params.id;
+    //user_id = req.params.id;
+    user_id = scrape_id;
     let query = db.query(sql, user_id, (err, results) => {
         if(err) throw err;
         console.log(results[0].short_url)
@@ -110,7 +115,8 @@ app.get('/user/:uid/friendship/:fid', (req,res, next) => {
     })
 });
 
-app.get('/add', (req,res, next)=> {
+app.post('/add', (req,res, next)=> {
+    let scrape_id;
     let short_url
     shortUrl.short(req.body.url, (err, url) => {
          short_url = url
@@ -118,7 +124,20 @@ app.get('/add', (req,res, next)=> {
         let sql = "INSERT INTO user SET ? ";
         let query = db.query(sql, data, (err, results) => {
         if(err) throw err;
-        console.log(results)
+        scrape_id = results.insertId
+        console.log("AFFECTED ROW", results.insertId)
+        let sql = "SELECT short_url FROM user WHERE id = ? ";
+         //user_id = req.params.id;
+         user_id = scrape_id;
+        let query = db.query(sql, user_id, (err, results) => {
+        if(err) throw err;
+        console.log(results[0].short_url)
+        getUrl(results[0].short_url, user_id)
+        
+        
+    })
+        
+        
     });
     })
 });
@@ -146,15 +165,43 @@ let getData = (html,u_id) =>{
         let value = {heading: $(ele).html(), user_id: u_id}
         let query = db.query(sql,value,(err, results) => {
             if(err) throw err;
-            console.log(results)
+            
         })
         
 
     })
-    
-    
+      
 }
 
-app.listen('3000', () => {
-    console.log("server started on port 3000");
+app.get('/user/:id/get-h1', (req,res,next) => {
+    let id = req.params.id
+    let sql = 'SELECT heading FROM h1 WHERE user_id=?'
+    let query = db.query(sql, id, (err, result) => {
+        if(err) throw err;
+        res.send(result)
+    })
+})
+
+app.get('/user/:id/friendcount',(req, res, next) => {
+    let sql = 'SELECT COUNT(id) AS count FROM friendship WHERE user_id=?'
+    let user_id = req.params.id
+    let query = db.query(sql, user_id, (err, result) => {
+        if(err) throw err;
+        console.log(result[0].count)
+        res.send(result)
+    })
+})
+
+app.get('/user/:id/friends',(req,res, next) => {
+    let sql = 'SELECT user.name, friendship.friend_id FROM user,friendship WHERE user.id=friendship.friend_id  AND friendship.user_id=?'
+    let user_id = req.params.id;
+    let query = db.query(sql, user_id, (err, result) => {
+        if(err) throw err;
+        console.log(result)
+        res.send(result)
+    })
+})
+
+app.listen('8000', () => {
+    console.log("server started on port 8000");
 });
